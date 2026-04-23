@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MedTopper — PDF-Powered MBBS Exam Engine</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=DM+Mono:wght@300;400;500&family=Crimson+Pro:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+:root {
+  --bg: #0b0f14;
+  --surface: #131920;
+  --surface2: #1a2332;
+  --border: #263040;
+  --border2: #1e2d40;
+  --accent: #e8c547;
+  --accent-dim: rgba(232,197,71,0.12);
+  --green: #4ade80;
+  --green-dim: rgba(74,222,128,0.1);
+  --blue: #60a5fa;
+  --blue-dim: rgba(96,165,250,0.1);
+  --red: #f87171;
+  --red-dim: rgba(248,113,113,0.08);
+  --text: #dce6f0;
+  --muted: #5a7a99;
+  --muted2: #3d5a75;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',Georgia,serif;font-size:17px;min-height:100vh;overflow-x:hidden;}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(232,197,71,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(232,197,71,0.03) 1px,transparent 1px);background-size:50px 50px;pointer-events:none;z-index:0;}
+body::after{content:'';position:fixed;top:-200px;left:50%;transform:translateX(-50%);width:700px;height:400px;background:radial-gradient(ellipse,rgba(232,197,71,0.06) 0%,transparent 70%);pointer-events:none;z-index:0;}
+header{position:sticky;top:0;z-index:100;background:rgba(11,15,20,0.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:1rem 2rem;display:flex;align-items:center;gap:1rem;}
+.logo{display:flex;align-items:baseline;gap:0.6rem;flex:1;}
+.logo-main{font-family:'Playfair Display',serif;font-size:1.6rem;font-weight:700;color:var(--accent);letter-spacing:-0.02em;}
+.logo-tag{font-family:'DM Mono',monospace;font-size:0.62rem;color:var(--muted);letter-spacing:0.12em;text-transform:uppercase;padding:0.2rem 0.5rem;border:1px solid var(--border);border-radius:2px;}
+.tab-row{display:flex;gap:0;background:var(--surface);border:1px solid var(--border);border-radius:4px;overflow:hidden;}
+.tab{font-family:'DM Mono',monospace;font-size:0.68rem;letter-spacing:0.08em;text-transform:uppercase;padding:0.5rem 1.1rem;cursor:pointer;color:var(--muted);border:none;background:transparent;transition:all 0.18s;}
+.tab.active{background:var(--accent);color:#0b0f14;font-weight:500;}
+.tab:not(.active):hover{color:var(--text);}
+.app{position:relative;z-index:1;display:grid;grid-template-columns:280px 1fr;min-height:calc(100vh - 57px);}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
+.sidebar-head{padding:1.2rem 1.2rem 0.8rem;border-bottom:1px solid var(--border2);}
+.sidebar-title{font-family:'DM Mono',monospace;font-size:0.65rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--accent);margin-bottom:0.9rem;}
+.upload-zone{border:1.5px dashed var(--border);border-radius:5px;padding:1.2rem 0.8rem;text-align:center;cursor:pointer;transition:all 0.2s;position:relative;}
+.upload-zone:hover,.upload-zone.drag-over{border-color:var(--accent);background:var(--accent-dim);}
+.upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.upload-icon{font-size:1.5rem;margin-bottom:0.4rem;display:block;}
+.upload-text{font-family:'DM Mono',monospace;font-size:0.65rem;color:var(--muted);letter-spacing:0.08em;}
+.upload-text strong{color:var(--accent);display:block;margin-bottom:0.2rem;font-size:0.72rem;}
+.pdf-list{flex:1;overflow-y:auto;padding:0.75rem;}
+.pdf-list::-webkit-scrollbar{width:3px;}
+.pdf-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+.pdf-item{display:flex;align-items:flex-start;gap:0.6rem;padding:0.75rem 0.65rem;border-radius:4px;margin-bottom:0.4rem;border:1px solid transparent;transition:all 0.18s;}
+.pdf-item:hover{background:var(--surface2);border-color:var(--border2);}
+.pdf-icon{font-size:1.1rem;flex-shrink:0;margin-top:1px;}
+.pdf-info{flex:1;min-width:0;}
+.pdf-name{font-family:'DM Mono',monospace;font-size:0.68rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:0.2rem;}
+.pdf-meta{font-family:'DM Mono',monospace;font-size:0.58rem;color:var(--muted);}
+.pdf-del{background:transparent;border:none;color:var(--muted2);cursor:pointer;font-size:0.8rem;padding:0.1rem 0.3rem;border-radius:2px;transition:color 0.15s;flex-shrink:0;}
+.pdf-del:hover{color:var(--red);}
+.no-pdfs{text-align:center;padding:2rem 1rem;font-family:'DM Mono',monospace;font-size:0.68rem;color:var(--muted2);line-height:1.7;}
+.progress-wrap{padding:0.75rem 1.2rem;border-top:1px solid var(--border2);display:none;}
+.progress-label{font-family:'DM Mono',monospace;font-size:0.62rem;color:var(--muted);margin-bottom:0.4rem;letter-spacing:0.08em;}
+.progress-bar{height:3px;background:var(--border);border-radius:2px;overflow:hidden;}
+.progress-fill{height:100%;background:var(--accent);border-radius:2px;width:0%;transition:width 0.3s ease;}
+.sidebar-stats{padding:0.75rem 1.2rem;border-top:1px solid var(--border2);display:flex;gap:1rem;}
+.stat{flex:1;text-align:center;}
+.stat-num{font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--accent);display:block;}
+.stat-label{font-family:'DM Mono',monospace;font-size:0.58rem;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;}
+main{display:flex;flex-direction:column;overflow:hidden;}
+.page{display:none;flex:1;flex-direction:column;overflow:hidden;}
+.page.active{display:flex;}
+.ask-inner{flex:1;overflow-y:auto;padding:2rem 2.5rem;}
+.ask-inner::-webkit-scrollbar{width:4px;}
+.ask-inner::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+.hero{text-align:center;margin-bottom:2rem;padding-top:0.5rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(1.4rem,3vw,2rem);line-height:1.25;margin-bottom:0.5rem;}
+.hero h1 em{color:var(--accent);font-style:italic;}
+.hero p{font-family:'DM Mono',monospace;font-size:0.68rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;}
+.source-indicator{display:flex;align-items:center;gap:0.6rem;padding:0.6rem 1rem;border-radius:4px;margin-bottom:1.2rem;font-family:'DM Mono',monospace;font-size:0.68rem;letter-spacing:0.06em;}
+.source-indicator.pdf-mode{background:var(--green-dim);border:1px solid rgba(74,222,128,0.25);color:var(--green);}
+.source-indicator.general-mode{background:var(--blue-dim);border:1px solid rgba(96,165,250,0.2);color:var(--blue);}
+.source-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.pdf-mode .source-dot{background:var(--green);box-shadow:0 0 6px var(--green);}
+.general-mode .source-dot{background:var(--blue);box-shadow:0 0 6px var(--blue);}
+.input-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-bottom:1.2rem;}
+.input-top{display:flex;align-items:center;gap:0.75rem;padding:0.75rem 1rem 0;}
+.input-label{font-family:'DM Mono',monospace;font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--accent);flex:1;}
+.select-sm{background:var(--surface2);border:1px solid var(--border);border-radius:3px;color:var(--text);font-family:'DM Mono',monospace;font-size:0.65rem;padding:0.3rem 0.6rem;cursor:pointer;outline:none;letter-spacing:0.04em;}
+.select-sm:focus{border-color:var(--accent);}
+textarea{width:100%;background:transparent;border:none;color:var(--text);font-family:'Crimson Pro',serif;font-size:1.05rem;padding:0.9rem 1rem;resize:none;min-height:90px;line-height:1.6;outline:none;}
+textarea::placeholder{color:var(--muted2);font-style:italic;}
+.input-bottom{display:flex;align-items:center;gap:0.75rem;padding:0.6rem 1rem;border-top:1px solid var(--border2);background:rgba(0,0,0,0.15);}
+.hint-text{font-family:'DM Mono',monospace;font-size:0.6rem;color:var(--muted2);flex:1;letter-spacing:0.06em;}
+.gen-btn{background:var(--accent);color:#0b0f14;border:none;border-radius:3px;padding:0.55rem 1.4rem;font-family:'DM Mono',monospace;font-size:0.72rem;font-weight:500;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;transition:all 0.18s;display:flex;align-items:center;gap:0.5rem;}
+.gen-btn:hover:not(:disabled){background:#f0d060;transform:translateY(-1px);box-shadow:0 4px 18px rgba(232,197,71,0.3);}
+.gen-btn:disabled{opacity:0.45;cursor:not-allowed;transform:none;box-shadow:none;}
+.spinner{width:12px;height:12px;border:2px solid rgba(0,0,0,0.25);border-top-color:#000;border-radius:50%;animation:spin 0.6s linear infinite;display:none;}
+.gen-btn.loading .spinner{display:block;}
+.gen-btn.loading .btn-text{display:none;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.chip-label{font-family:'DM Mono',monospace;font-size:0.6rem;color:var(--muted2);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.5rem;display:block;}
+.chips-row{display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:1.5rem;}
+.chip{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:0.28rem 0.85rem;font-family:'Crimson Pro',serif;font-size:0.85rem;font-style:italic;color:var(--muted);cursor:pointer;transition:all 0.18s;}
+.chip:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-dim);}
+#answer-wrap{display:none;animation:fadeUp 0.35s ease;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
+.answer-header{display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;flex-wrap:wrap;}
+.answer-tag{font-family:'DM Mono',monospace;font-size:0.62rem;letter-spacing:0.12em;text-transform:uppercase;padding:0.22rem 0.65rem;border-radius:2px;}
+.answer-tag.from-pdf{background:var(--green-dim);border:1px solid rgba(74,222,128,0.3);color:var(--green);}
+.answer-tag.from-ai{background:var(--blue-dim);border:1px solid rgba(96,165,250,0.25);color:var(--blue);}
+.answer-sources{font-family:'DM Mono',monospace;font-size:0.6rem;color:var(--muted);flex:1;letter-spacing:0.04em;}
+.copy-btn,.new-btn{font-family:'DM Mono',monospace;font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;padding:0.3rem 0.8rem;border-radius:3px;cursor:pointer;transition:all 0.18s;background:transparent;border:1px solid var(--border);color:var(--muted);}
+.copy-btn:hover{border-color:var(--accent);color:var(--accent);}
+.new-btn:hover{border-color:var(--green);color:var(--green);}
+.answer-paper{background:#080d12;border:1px solid var(--border);border-radius:6px;overflow:hidden;}
+.paper-bar{background:var(--surface);border-bottom:1px solid var(--border);padding:0.6rem 1rem;display:flex;align-items:center;gap:0.4rem;}
+.dot{width:9px;height:9px;border-radius:50%;}
+.dot-r{background:#ef4444;}.dot-y{background:#f59e0b;}.dot-g{background:#22c55e;}
+.paper-fname{font-family:'DM Mono',monospace;font-size:0.62rem;color:var(--muted);margin-left:0.4rem;}
+.answer-content{padding:1.8rem 2.2rem;line-height:1.9;font-family:'Crimson Pro',serif;font-size:1.06rem;color:var(--text);min-height:60px;}
+.answer-content .sec-head{font-family:'Playfair Display',serif;font-weight:700;color:var(--accent);font-size:1.1rem;display:block;margin-top:1.1rem;margin-bottom:0.25rem;border-bottom:1px solid rgba(232,197,71,0.15);padding-bottom:0.18rem;}
+.answer-content .sub-head{font-family:'Crimson Pro',serif;font-weight:600;color:#93c5fd;font-size:1rem;display:block;margin-top:0.8rem;margin-bottom:0.15rem;}
+.answer-content .diagram-box{display:flex;align-items:center;gap:0.6rem;background:var(--green-dim);border:1px solid rgba(74,222,128,0.3);border-radius:3px;color:var(--green);font-family:'DM Mono',monospace;font-size:0.75rem;padding:0.45rem 0.85rem;margin:0.5rem 0;letter-spacing:0.03em;}
+.answer-content .table-box{display:flex;align-items:center;gap:0.6rem;background:var(--blue-dim);border:1px solid rgba(96,165,250,0.3);border-radius:3px;color:var(--blue);font-family:'DM Mono',monospace;font-size:0.75rem;padding:0.45rem 0.85rem;margin:0.5rem 0;}
+.answer-content .mnemonic-box{background:var(--accent-dim);border-left:3px solid var(--accent);padding:0.5rem 1rem;margin:0.5rem 0;font-style:italic;color:#fde68a;border-radius:0 3px 3px 0;font-size:0.95rem;}
+.answer-content .examiner-box{background:rgba(96,165,250,0.07);border-left:3px solid var(--blue);padding:0.5rem 1rem;margin:0.7rem 0 0.2rem;color:#bfdbfe;border-radius:0 3px 3px 0;font-size:0.93rem;}
+.answer-content .bullet::before{content:'▸ ';color:var(--accent);}
+.relevance-bar-wrap{padding:0 2.2rem 1.2rem;background:#080d12;}
+.rel-label{font-family:'DM Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.08em;margin-bottom:0.3rem;display:flex;justify-content:space-between;}
+.rel-bar{height:3px;background:var(--border);border-radius:2px;overflow:hidden;}
+.rel-fill{height:100%;border-radius:2px;transition:width 0.6s ease;}
+.error-box{background:var(--red-dim);border:1px solid rgba(248,113,113,0.25);color:var(--red);font-family:'DM Mono',monospace;font-size:0.72rem;padding:0.75rem 1rem;border-radius:4px;margin-bottom:1rem;display:none;}
+.admin-inner{flex:1;overflow-y:auto;padding:2rem 2.5rem;}
+.admin-title{font-family:'Playfair Display',serif;font-size:1.5rem;margin-bottom:0.4rem;}
+.admin-sub{font-family:'DM Mono',monospace;font-size:0.65rem;color:var(--muted);letter-spacing:0.1em;margin-bottom:2rem;text-transform:uppercase;}
+.admin-section{background:var(--surface);border:1px solid var(--border);border-radius:6px;margin-bottom:1.5rem;overflow:hidden;}
+.admin-section-head{padding:0.9rem 1.2rem;border-bottom:1px solid var(--border2);font-family:'DM Mono',monospace;font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--accent);display:flex;align-items:center;gap:0.5rem;}
+.admin-table{width:100%;border-collapse:collapse;}
+.admin-table th{font-family:'DM Mono',monospace;font-size:0.6rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);padding:0.7rem 1.2rem;text-align:left;border-bottom:1px solid var(--border2);}
+.admin-table td{font-family:'DM Mono',monospace;font-size:0.7rem;padding:0.75rem 1.2rem;border-bottom:1px solid var(--border2);color:var(--text);vertical-align:middle;}
+.admin-table tr:last-child td{border-bottom:none;}
+.admin-table tr:hover td{background:var(--surface2);}
+.status-pill{display:inline-flex;align-items:center;gap:0.35rem;padding:0.18rem 0.55rem;border-radius:20px;font-size:0.6rem;letter-spacing:0.06em;}
+.status-pill.ready{background:var(--green-dim);color:var(--green);border:1px solid rgba(74,222,128,0.25);}
+.del-btn{background:transparent;border:1px solid var(--border);color:var(--muted);font-family:'DM Mono',monospace;font-size:0.6rem;padding:0.25rem 0.6rem;border-radius:2px;cursor:pointer;transition:all 0.15s;letter-spacing:0.06em;}
+.del-btn:hover{border-color:var(--red);color:var(--red);}
+.clear-btn{background:var(--red-dim);border:1px solid rgba(248,113,113,0.25);color:var(--red);font-family:'DM Mono',monospace;font-size:0.68rem;padding:0.45rem 1rem;border-radius:3px;cursor:pointer;transition:all 0.18s;letter-spacing:0.06em;}
+.clear-btn:hover{background:rgba(248,113,113,0.15);}
+.info-grid{display:grid;grid-template-columns:repeat(3,1fr);}
+.info-cell{padding:1rem 1.2rem;border-right:1px solid var(--border2);text-align:center;}
+.info-cell:last-child{border-right:none;}
+.info-num{font-family:'Playfair Display',serif;font-size:1.6rem;color:var(--accent);display:block;margin-bottom:0.2rem;}
+.info-lbl{font-family:'DM Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;}
+.empty-state{text-align:center;padding:2.5rem 1rem;font-family:'DM Mono',monospace;font-size:0.68rem;color:var(--muted2);line-height:1.8;}
+@media(max-width:750px){.app{grid-template-columns:1fr;}.sidebar{display:none;}.ask-inner,.admin-inner{padding:1.2rem;}.answer-content{padding:1.2rem;}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <span class="logo-main">MedTopper</span>
+    <span class="logo-tag">PDF-Powered RAG</span>
+  </div>
+  <div class="tab-row">
+    <button class="tab active" onclick="switchTab('ask',this)">✦ Ask</button>
+    <button class="tab" onclick="switchTab('admin',this)">⚙ PDFs</button>
+  </div>
+</header>
+
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-head">
+      <div class="sidebar-title">📚 Loaded PDFs</div>
+      <div class="upload-zone" id="upload-zone">
+        <input type="file" accept=".pdf" multiple onchange="handleFiles(this.files)" id="file-input">
+        <span class="upload-icon">⊕</span>
+        <div class="upload-text">
+          <strong>Upload PDFs</strong>
+          Drag &amp; drop or click<br>Stored in your browser
+        </div>
+      </div>
+    </div>
+    <div class="pdf-list" id="pdf-list">
+      <div class="no-pdfs" id="no-pdfs-msg">No PDFs yet.<br>Upload notes, textbooks,<br>or question banks above.</div>
+    </div>
+    <div class="progress-wrap" id="progress-wrap">
+      <div class="progress-label" id="progress-label">Processing...</div>
+      <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+    </div>
+    <div class="sidebar-stats">
+      <div class="stat"><span class="stat-num" id="stat-pdfs">0</span><span class="stat-label">PDFs</span></div>
+      <div class="stat"><span class="stat-num" id="stat-chunks">0</span><span class="stat-label">Chunks</span></div>
+      <div class="stat"><span class="stat-num" id="stat-pages">0</span><span class="stat-label">Pages</span></div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main>
+
+    <!-- ASK PAGE -->
+    <div class="page active" id="page-ask">
+      <div class="ask-inner">
+        <div class="hero">
+          <h1>Write answers like an <em>MBBS Topper</em></h1>
+          <p>AI searches your PDFs · Exam-ready format · Figures guided</p>
+        </div>
+
+        <div class="source-indicator general-mode" id="source-indicator">
+          <span class="source-dot"></span>
+          <span id="source-text">No PDFs loaded — using general MBBS knowledge</span>
+        </div>
+
+        <div class="error-box" id="error-box"></div>
+
+        <div class="input-card">
+          <div class="input-top">
+            <span class="input-label">↳ Your Exam Question</span>
+            <select class="select-sm" id="marks-sel">
+              <option value="2">2 marks</option>
+              <option value="5" selected>5 marks</option>
+              <option value="10">10 marks</option>
+              <option value="15">15 marks</option>
+            </select>
+            <select class="select-sm" id="subj-sel">
+              <option value="auto">Auto Subject</option>
+              <option value="Anatomy">Anatomy</option>
+              <option value="Physiology">Physiology</option>
+              <option value="Biochemistry">Biochemistry</option>
+              <option value="Pathology">Pathology</option>
+              <option value="Pharmacology">Pharmacology</option>
+              <option value="Microbiology">Microbiology</option>
+              <option value="Medicine">Medicine</option>
+              <option value="Surgery">Surgery</option>
+              <option value="OBG">OBG</option>
+              <option value="Pediatrics">Pediatrics</option>
+              <option value="Community Medicine">Community Medicine</option>
+            </select>
+          </div>
+          <textarea id="q-input" rows="4" placeholder="e.g. Describe histology of liver / Short note on BBB / Branches of facial nerve / Mechanism of beta blockers…"></textarea>
+          <div class="input-bottom">
+            <span class="hint-text">Ctrl+Enter to generate</span>
+            <button class="gen-btn" id="gen-btn" onclick="generate()">
+              <span class="spinner"></span>
+              <span class="btn-text">Generate Answer ↗</span>
+            </button>
+          </div>
+        </div>
+
+        <span class="chip-label">Quick examples →</span>
+        <div class="chips-row">
+          <span class="chip" onclick="setQ(this)">Histology of liver</span>
+          <span class="chip" onclick="setQ(this)">Blood Brain Barrier</span>
+          <span class="chip" onclick="setQ(this)">Cardiac action potential</span>
+          <span class="chip" onclick="setQ(this)">Mechanism of beta blockers</span>
+          <span class="chip" onclick="setQ(this)">Pathogenesis of Type 2 DM</span>
+          <span class="chip" onclick="setQ(this)">Branches of facial nerve</span>
+        </div>
+
+        <div id="answer-wrap">
+          <div class="answer-header">
+            <span class="answer-tag" id="ans-tag">✓ Answer</span>
+            <span class="answer-sources" id="ans-sources"></span>
+            <button class="new-btn" onclick="resetAnswer()">+ New</button>
+            <button class="copy-btn" onclick="copyAnswer()">⎘ Copy</button>
+          </div>
+          <div class="answer-paper">
+            <div class="paper-bar">
+              <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+              <span class="paper-fname" id="paper-fname">answer.txt</span>
+            </div>
+            <div class="answer-content" id="ans-content"></div>
+            <div class="relevance-bar-wrap" id="rel-wrap" style="display:none">
+              <div class="rel-label"><span>PDF Relevance Match</span><span id="rel-pct">—</span></div>
+              <div class="rel-bar"><div class="rel-fill" id="rel-fill" style="width:0%"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ADMIN PAGE -->
+    <div class="page" id="page-admin">
+      <div class="admin-inner">
+        <div class="admin-title">PDF Library</div>
+        <div class="admin-sub">Manage your knowledge base · Stored locally in browser (IndexedDB)</div>
+
+        <div class="admin-section">
+          <div class="admin-section-head">📊 Storage Overview</div>
+          <div class="info-grid">
+            <div class="info-cell"><span class="info-num" id="adm-pdfs">0</span><span class="info-lbl">PDFs Loaded</span></div>
+            <div class="info-cell"><span class="info-num" id="adm-chunks">0</span><span class="info-lbl">Text Chunks</span></div>
+            <div class="info-cell"><span class="info-num" id="adm-pages">0</span><span class="info-lbl">Total Pages</span></div>
+          </div>
+        </div>
+
+        <div class="admin-section">
+          <div class="admin-section-head">
+            📚 Loaded Documents
+            <button class="clear-btn" style="margin-left:auto" onclick="clearAll()">🗑 Clear All</button>
+          </div>
+          <div id="adm-table-wrap"><div class="empty-state">No PDFs loaded yet.</div></div>
+        </div>
+
+        <div class="admin-section">
+          <div class="admin-section-head">📤 Upload PDFs</div>
+          <div style="padding:1.2rem;">
+            <div class="upload-zone" style="max-width:400px;margin:0 auto;">
+              <input type="file" accept=".pdf" multiple onchange="handleFiles(this.files)">
+              <span class="upload-icon">⊕</span>
+              <div class="upload-text"><strong>Upload PDF Files</strong>Textbooks, notes, question banks<br>Processed &amp; stored locally</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+let DB, pdfStore = [];
+const DB_NAME = 'medtopper_v3', DB_VER = 1;
+
+function openDB() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(DB_NAME, DB_VER);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('pdfs')) db.createObjectStore('pdfs', { keyPath: 'id' });
+    };
+    req.onsuccess = e => { DB = e.target.result; res(DB); };
+    req.onerror = () => rej(req.error);
+  });
+}
+function dbSave(r) {
+  return new Promise((res,rej) => { const tx=DB.transaction('pdfs','readwrite'); tx.objectStore('pdfs').put(r); tx.oncomplete=res; tx.onerror=()=>rej(tx.error); });
+}
+function dbDelete(id) {
+  return new Promise((res,rej) => { const tx=DB.transaction('pdfs','readwrite'); tx.objectStore('pdfs').delete(id); tx.oncomplete=res; tx.onerror=()=>rej(tx.error); });
+}
+function dbLoadAll() {
+  return new Promise((res,rej) => { const tx=DB.transaction('pdfs','readonly'); const req=tx.objectStore('pdfs').getAll(); req.onsuccess=()=>res(req.result); req.onerror=()=>rej(req.error); });
+}
+function dbClearAll() {
+  return new Promise((res,rej) => { const tx=DB.transaction('pdfs','readwrite'); tx.objectStore('pdfs').clear(); tx.oncomplete=res; tx.onerror=()=>rej(tx.error); });
+}
+
+async function init() {
+  await openDB();
+  pdfStore = await dbLoadAll();
+  renderPdfList();
+  updateStats();
+  updateSourceIndicator();
+  const zone = document.getElementById('upload-zone');
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('drag-over'); handleFiles(e.dataTransfer.files); });
+}
+
+async function handleFiles(files) {
+  for (const file of files) {
+    if (file.type !== 'application/pdf') { showError(`"${file.name}" is not a PDF.`); continue; }
+    if (pdfStore.find(p => p.name === file.name)) { showError(`"${file.name}" is already loaded.`); continue; }
+    await processPDF(file);
+  }
+}
+
+async function processPDF(file) {
+  const pw = document.getElementById('progress-wrap');
+  const pf = document.getElementById('progress-fill');
+  const pl = document.getElementById('progress-label');
+  pw.style.display = 'block';
+  pl.textContent = `Reading: ${file.name}`;
+  pf.style.width = '5%';
+
+  try {
+    const ab = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
+    const totalPages = pdf.numPages;
+    let allChunks = [];
+
+    for (let i = 1; i <= totalPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const pageText = content.items.map(it => it.str).join(' ').replace(/\s+/g, ' ').trim();
+
+      if (pageText.length < 60) { pf.style.width = `${5 + (i/totalPages)*90}%`; continue; }
+
+      // Chunk ~400 words with 80-word overlap
+      const words = pageText.split(' ');
+      const CHUNK = 400, OVERLAP = 80;
+      for (let j = 0; j < words.length; j += (CHUNK - OVERLAP)) {
+        const chunk = words.slice(j, j + CHUNK).join(' ');
+        if (chunk.length > 60) allChunks.push({ text: chunk, page: i, file: file.name });
+        if (j + CHUNK >= words.length) break;
+      }
+
+      pf.style.width = `${5 + (i/totalPages)*90}%`;
+      pl.textContent = `Page ${i}/${totalPages} — ${file.name}`;
+    }
+
+    const record = { id: Date.now()+'_'+Math.random().toString(36).slice(2), name: file.name, pages: totalPages, chunks: allChunks, size: file.size, addedAt: new Date().toISOString() };
+    await dbSave(record);
+    pdfStore.push(record);
+    pf.style.width = '100%';
+    pl.textContent = `✓ Indexed: ${file.name} (${allChunks.length} chunks)`;
+    setTimeout(() => { pw.style.display = 'none'; pf.style.width = '0%'; }, 2000);
+    renderPdfList(); updateStats(); updateSourceIndicator();
+  } catch(err) {
+    pw.style.display = 'none';
+    showError('Failed to process PDF: ' + err.message);
+  }
+}
+
+function renderPdfList() {
+  const list = document.getElementById('pdf-list');
+  if (pdfStore.length === 0) {
+    list.innerHTML = '<div class="no-pdfs">No PDFs yet.<br>Upload notes, textbooks,<br>or question banks above.</div>';
+    renderAdminTable(); return;
+  }
+  list.innerHTML = pdfStore.map(p => `
+    <div class="pdf-item">
+      <span class="pdf-icon">📄</span>
+      <div class="pdf-info">
+        <div class="pdf-name" title="${p.name}">${p.name}</div>
+        <div class="pdf-meta">${p.pages} pg · ${p.chunks.length} chunks · ${fmtSize(p.size)}</div>
+      </div>
+      <button class="pdf-del" onclick="deletePDF('${p.id}')">✕</button>
+    </div>`).join('');
+  renderAdminTable();
+}
+
+function renderAdminTable() {
+  document.getElementById('adm-pdfs').textContent = pdfStore.length;
+  document.getElementById('adm-chunks').textContent = pdfStore.reduce((a,p)=>a+p.chunks.length,0);
+  document.getElementById('adm-pages').textContent = pdfStore.reduce((a,p)=>a+p.pages,0);
+  const wrap = document.getElementById('adm-table-wrap');
+  if (pdfStore.length === 0) { wrap.innerHTML = '<div class="empty-state">No PDFs loaded yet.</div>'; return; }
+  wrap.innerHTML = `<table class="admin-table"><thead><tr><th>File</th><th>Pages</th><th>Chunks</th><th>Size</th><th>Status</th><th></th></tr></thead><tbody>${
+    pdfStore.map(p=>`<tr><td>${p.name}</td><td>${p.pages}</td><td>${p.chunks.length}</td><td>${fmtSize(p.size)}</td><td><span class="status-pill ready">● Ready</span></td><td><button class="del-btn" onclick="deletePDF('${p.id}')">Remove</button></td></tr>`).join('')
+  }</tbody></table>`;
+}
+
+function updateStats() {
+  document.getElementById('stat-pdfs').textContent = pdfStore.length;
+  document.getElementById('stat-chunks').textContent = pdfStore.reduce((a,p)=>a+p.chunks.length,0);
+  document.getElementById('stat-pages').textContent = pdfStore.reduce((a,p)=>a+p.pages,0);
+}
+
+function updateSourceIndicator() {
+  const ind = document.getElementById('source-indicator');
+  const txt = document.getElementById('source-text');
+  const total = pdfStore.reduce((a,p)=>a+p.chunks.length,0);
+  if (pdfStore.length === 0) {
+    ind.className = 'source-indicator general-mode';
+    txt.textContent = 'No PDFs loaded — using general MBBS knowledge';
+  } else {
+    ind.className = 'source-indicator pdf-mode';
+    txt.textContent = `${pdfStore.length} PDF${pdfStore.length>1?'s':''} active · ${total} searchable chunks · Answers from your notes`;
+  }
+}
+
+async function deletePDF(id) { await dbDelete(id); pdfStore=pdfStore.filter(p=>p.id!==id); renderPdfList(); updateStats(); updateSourceIndicator(); }
+async function clearAll() { if(!confirm('Remove all PDFs?')) return; await dbClearAll(); pdfStore=[]; renderPdfList(); updateStats(); updateSourceIndicator(); }
+
+// ── Keyword-based retrieval (TF-IDF style) ──
+const STOP = new Set(['the','and','for','are','was','with','that','this','from','have','been','they','their','into','more','will','also','its','can','but','not','which','one','all','had','she','his','her','has','him','its','about','what','when','where','how','why','who','may','should','would','could','were','been','being','after','before','during','between','through','under','over','same','such','each','both','most','some','any','other','than','then','only','just','very','much','many','well','like']);
+
+function tokenize(text) {
+  return text.toLowerCase().replace(/[^a-z0-9\s]/g,' ').split(/\s+/).filter(w=>w.length>2&&!STOP.has(w));
+}
+
+function scoreChunk(cTokens, qTokens) {
+  if (!qTokens.length) return 0;
+  const cSet = new Set(cTokens);
+  let score = 0;
+  for (const qt of qTokens) {
+    if (cSet.has(qt)) { score += 3; continue; }
+    for (const ct of cSet) {
+      if (ct.startsWith(qt) || qt.startsWith(ct)) { score += 1; break; }
+    }
+  }
+  return score / qTokens.length;
+}
+
+function retrieveTopChunks(question, topK=7) {
+  if (!pdfStore.length) return { chunks:[], maxScore:0 };
+  const qTokens = tokenize(question);
+  let scored = [];
+  for (const pdf of pdfStore) {
+    for (const chunk of pdf.chunks) {
+      const s = scoreChunk(tokenize(chunk.text), qTokens);
+      if (s > 0.4) scored.push({...chunk, score:s, pdfName:pdf.name});
+    }
+  }
+  scored.sort((a,b)=>b.score-a.score);
+  const top = scored.slice(0, topK);
+  return { chunks:top, maxScore: top.length ? top[0].score : 0 };
+}
+
+// ── Generate ──
+async function generate() {
+  const question = document.getElementById('q-input').value.trim();
+  const marks = document.getElementById('marks-sel').value;
+  const subject = document.getElementById('subj-sel').value;
+  const btn = document.getElementById('gen-btn');
+  const errBox = document.getElementById('error-box');
+
+  if (!question) { showError('Please enter a question first.'); return; }
+  errBox.style.display = 'none';
+  btn.classList.add('loading'); btn.disabled = true;
+  document.getElementById('answer-wrap').style.display = 'none';
+
+  try {
+    const { chunks, maxScore } = retrieveTopChunks(question, 7);
+    const hasPDF = chunks.length > 0 && maxScore > 0.5;
+
+    let contextBlock = '', sourceNames = new Set();
+    if (hasPDF) {
+      contextBlock = chunks.map((c,i)=>`[EXCERPT ${i+1} | File: ${c.pdfName} | Page ${c.page}]\n${c.text}`).join('\n\n---\n\n');
+      chunks.forEach(c=>sourceNames.add(c.pdfName));
+    }
+
+    const marksDesc = marks<=2?'very short (2-3 key points, ~80 words)':marks<=5?'medium answer (~200-250 words)':marks<=10?'detailed long answer (~400-500 words)':'comprehensive essay (~600-700 words)';
+    const subjNote = subject==='auto'?'':`Subject: ${subject}. `;
+
+    const system = `You are an MBBS topper writing model answers for exam paper.
+${hasPDF?`USE THE PROVIDED PDF EXCERPTS as primary source. Ground your answer in the student's own notes. Expand intelligently where needed.`:`No PDF match found. Use comprehensive MBBS medical knowledge.`}
+
+FORMAT — use these EXACT tags (no markdown symbols like ** or ##):
+[HEADING: Title] — major section
+[SUBHEADING: Title] — sub-section
+[POINT] text — bullet point
+[DIAGRAM: describe exactly what to draw and what labels to include] — be very specific
+[TABLE: column names and what to fill] — table suggestion
+[MNEMONIC: memory device] — mnemonic
+[EXAMINER TIP: one sentence] — marks tip
+
+RULES:
+- Write as a topper student writes on paper (flowing prose + structured points)
+- Length for ${marks} marks: ${marksDesc}
+- Always mention every relevant diagram with exact labeling instructions
+- Correct medical terminology throughout
+- ${subjNote}`;
+
+    const userMsg = hasPDF
+      ? `EXAM QUESTION (${marks} marks): ${question}\n\nRELEVANT EXCERPTS FROM STUDENT'S PDF NOTES:\n${contextBlock}\n\nWrite the complete exam answer using the above content as primary source. Expand with medical knowledge where the PDF is incomplete.`
+      : `EXAM QUESTION (${marks} marks): ${question}\n\nWrite complete exam-ready answer with all figure/diagram guidance.`;
+
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        model:"claude-sonnet-4-20250514",
+        max_tokens:1800,
+        system,
+        messages:[{role:"user",content:userMsg}]
+      })
+    });
+
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error?.message||'API error');
+    const raw = data.content?.map(b=>b.text||'').join('')||'';
+
+    const ansTag = document.getElementById('ans-tag');
+    const ansSrc = document.getElementById('ans-sources');
+    const relWrap = document.getElementById('rel-wrap');
+    const relFill = document.getElementById('rel-fill');
+    const relPct = document.getElementById('rel-pct');
+
+    if (hasPDF) {
+      ansTag.className='answer-tag from-pdf'; ansTag.textContent='✓ From Your PDFs';
+      ansSrc.textContent=`Sources: ${[...sourceNames].join(', ')} · ${chunks.length} chunks matched`;
+      document.getElementById('paper-fname').textContent=[...sourceNames][0]||'answer.txt';
+      relWrap.style.display='block';
+      const pct=Math.min(100,Math.round((maxScore/5)*100));
+      relFill.style.width=pct+'%';
+      relFill.style.background=pct>60?'var(--green)':pct>35?'var(--accent)':'var(--red)';
+      relPct.textContent=pct+'% match';
+    } else {
+      ansTag.className='answer-tag from-ai'; ansTag.textContent='✦ General MBBS Knowledge';
+      ansSrc.textContent='No relevant PDF content found · Using comprehensive MBBS training';
+      document.getElementById('paper-fname').textContent='answer.txt';
+      relWrap.style.display='none';
+    }
+
+    renderAnswer(raw, document.getElementById('ans-content'));
+    document.getElementById('answer-wrap').style.display='block';
+    document.getElementById('answer-wrap').scrollIntoView({behavior:'smooth',block:'start'});
+
+  } catch(err) {
+    showError('Error: '+err.message);
+  } finally {
+    btn.classList.remove('loading'); btn.disabled=false;
+  }
+}
+
+function renderAnswer(raw, container) {
+  const lines = raw.split('\n');
+  let html = '';
+  for (let line of lines) {
+    line = line.trim();
+    if (!line) { html+='\n'; continue; }
+    let m;
+    if ((m=line.match(/^\[HEADING:\s*(.+)\]/i))) html+=`<span class="sec-head">◆ ${m[1]}</span>`;
+    else if ((m=line.match(/^\[SUBHEADING:\s*(.+)\]/i))) html+=`<span class="sub-head">▸ ${m[1]}</span>`;
+    else if ((m=line.match(/^\[DIAGRAM:\s*(.+)\]/i))) html+=`<div class="diagram-box">🖊&nbsp; DRAW: ${m[1]}</div>`;
+    else if ((m=line.match(/^\[TABLE:\s*(.+)\]/i))) html+=`<div class="table-box">📋&nbsp; TABLE: ${m[1]}</div>`;
+    else if ((m=line.match(/^\[MNEMONIC:\s*(.+)\]/i))) html+=`<div class="mnemonic-box">💡 Mnemonic: ${m[1]}</div>`;
+    else if ((m=line.match(/^\[EXAMINER TIP:\s*(.+)\]/i))) html+=`<div class="examiner-box">⭐ Examiner Tip: ${m[1]}</div>`;
+    else if ((m=line.match(/^\[POINT\]\s*(.*)/i))) html+=`<span class="bullet">${m[1]}</span>\n`;
+    else html+=line+'\n';
+  }
+  container.innerHTML = html;
+}
+
+function setQ(el) { document.getElementById('q-input').value=el.textContent; }
+function resetAnswer() { document.getElementById('answer-wrap').style.display='none'; document.getElementById('q-input').value=''; document.getElementById('q-input').focus(); }
+function copyAnswer() {
+  const t=document.getElementById('ans-content').innerText;
+  navigator.clipboard.writeText(t).then(()=>{ const b=document.querySelector('.copy-btn'); b.textContent='✓ Copied!'; setTimeout(()=>b.textContent='⎘ Copy',2000); });
+}
+function showError(msg) { const b=document.getElementById('error-box'); b.textContent=msg; b.style.display='block'; setTimeout(()=>b.style.display='none',5000); }
+function fmtSize(b) { if(b<1024)return b+'B'; if(b<1048576)return (b/1024).toFixed(0)+'KB'; return (b/1048576).toFixed(1)+'MB'; }
+function switchTab(tab,btn) {
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('page-'+tab).classList.add('active');
+}
+
+document.getElementById('q-input').addEventListener('keydown',e=>{ if(e.key==='Enter'&&e.ctrlKey) generate(); });
+init();
+</script>
+</body>
+</html>
